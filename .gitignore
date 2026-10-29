@@ -1,0 +1,10 @@
+# binários do build (grandes; o GitHub recusa ficheiros > 100 MB)
+dist/
+Rui Caetano Player/
+build/
+*.zip
+*.exe
+__pycache__/
+*.pyc
+# notas de conversas
+conversas/
