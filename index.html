@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Música leve</title>
+<title>Rui Caetano Player</title>
 <style>
   :root {
     --bg: #f4f5f7; --card: #fff; --text: #1b1d21; --muted: #6a707b; --line: #dfe2e8;
@@ -53,7 +53,7 @@
 </head>
 <body>
 <main>
-  <h1>🎵 Música leve</h1>
+  <h1>🎵 Rui Caetano Player</h1>
 
   <div class="card">
     <textarea id="box" rows="2" placeholder="Cola aqui links do YouTube (um por linha) — adiciona logo"></textarea>
@@ -269,7 +269,7 @@ addEventListener("pagehide", save);
 function render() {
   const id = curId();
   $("now").textContent = id && active ? title(id) : "Nada a tocar";
-  document.title = id && active ? "▶ " + title(id) : "Música leve";
+  document.title = id && active ? "▶ " + title(id) : "Rui Caetano Player";
   if (!active) { $("play").textContent = "▶"; $("seek").value = 0; $("time").textContent = "0:00 / --:--"; }
   const q = $("queue");
   q.textContent = "";
@@ -326,7 +326,7 @@ function removeAt(i) {
 function setMediaSession(id) {
   if (!("mediaSession" in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: title(id), artist: "Música leve",
+    title: title(id), artist: "Rui Caetano Player",
     artwork: [{ src: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg", sizes: "480x360", type: "image/jpeg" }]
   });
 }
