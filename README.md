@@ -45,7 +45,7 @@ Leitor de música/vídeo do YouTube com fila, histórico e memória da posição
 - Estado `S` (fila, índice, metadados, histórico, aleatório, repetir, velocidade) em `localStorage`, guardado a cada 5 s e em `visibilitychange` / `pagehide`.
 - Interface responsiva (largura máx. 640 px), tema claro/escuro automático, pensada para telemóvel.
 - `Media Session API`: título, capa e botões no ecrã de bloqueio / auscultadores.
-- Aceita `musica.html?add=LINK` para adicionar um link pelo endereço.
+- Aceita `index.html?add=LINK` para adicionar um link pelo endereço.
 
 **Servidor** (`servir.pyw`): `http.server` em `127.0.0.1:8765`, sem consola (`pythonw`). Existe só porque o YouTube não aceita o leitor embutido em páginas abertas como `file://`; precisa de uma origem `http://`. `abrir-web.bat` arranca o servidor (com o `pythonw` do PATH, a partir da própria pasta) e abre `http://localhost:8765/index.html`.
 
