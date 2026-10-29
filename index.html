@@ -31,6 +31,8 @@
   button.on { background: var(--accent-soft); border-color: var(--accent); }
   #video { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
   #video iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #video.audio { aspect-ratio: auto; height: 0; }
+  #video.audio iframe { height: 200px; }
   #now { font-weight: 600; margin: 10px 0 2px; overflow-wrap: anywhere; }
   #status { color: var(--muted); font-size: .85rem; min-height: 1.2em; }
   .seek { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
@@ -56,10 +58,9 @@
   <h1>🎵 Rui Caetano Player</h1>
 
   <div class="card">
-    <textarea id="box" rows="2" placeholder="Cola aqui links do YouTube (um por linha) — adiciona logo"></textarea>
+    <textarea id="box" rows="2" placeholder="Cola aqui links do YouTube (vídeo ou playlist, um por linha)"></textarea>
     <div class="row" style="margin-top:8px">
-      <button id="add" class="primary">＋ Adicionar</button>
-      <button id="replace">Limpar e tocar</button>
+      <button id="add" class="primary">＋ Colar e adicionar</button>
     </div>
   </div>
 
@@ -80,6 +81,7 @@
     </div>
     <div class="row" style="margin-top:8px; justify-content:center">
       <button id="shuffle">Aleatório</button>
+      <button id="audio">Só áudio: não</button>
       <button id="repeat">Repetir: não</button>
       <label>Veloc. <select id="speed">
         <option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option>
@@ -114,7 +116,7 @@ const KEY = "musicaleve-v1";
 const REPEAT = ["Repetir: não", "Repetir: fila", "Repetir: uma"];
 
 // ---------- estado (guardado no aparelho) ----------
-let S = { queue: [], idx: -1, meta: {}, hist: {}, shuffle: false, repeat: 0, speed: "1" };
+let S = { queue: [], idx: -1, meta: {}, hist: {}, shuffle: false, repeat: 0, speed: "1", audio: false };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
 if (!(S.idx >= 0 && S.idx < S.queue.length)) S.idx = -1;
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
@@ -148,23 +150,69 @@ async function fetchTitle(id) {
     save(); render();
   } catch (e) { /* sem net: fica o link */ }
 }
-function addFromBox(replace) {
-  const ids = [];
+function parseList(text) {
+  const m = text.match(/youtube\.com\/playlist\?(?:.*&)?list=([\w-]+)/);
+  return m ? m[1] : null;
+}
+// Lê os vídeos de uma playlist com um leitor temporário e escondido (getPlaylist)
+function expandPlaylist(list) {
+  return new Promise(resolve => {
+    if (!(window.YT && YT.Player)) return resolve([]);
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;left:-9999px;top:0;width:200px;height:200px";
+    const inner = document.createElement("div");
+    host.appendChild(inner);
+    document.body.appendChild(host);
+    let p, iv, done = false;
+    const t0 = Date.now();
+    const finish = ids => {
+      if (done) return;
+      done = true; clearInterval(iv);
+      try { p.destroy(); } catch (e) {}
+      host.remove();
+      resolve(ids || []);
+    };
+    p = new YT.Player(inner, {
+      width: 200, height: 200, playerVars: { listType: "playlist", list: list },
+      events: { onReady: () => {
+        iv = setInterval(() => {
+          let a = null;
+          try { a = p.getPlaylist(); } catch (e) {}
+          if (a && a.length) finish(a);
+          else if (Date.now() - t0 > 12000) finish([]);
+        }, 300);
+      } }
+    });
+    setTimeout(() => finish([]), 15000);
+  });
+}
+async function addFromBox() {
+  const ids = [], lists = [];
   let skipped = 0;
   for (const line of $("box").value.split(/\s+/)) {
     if (!line.startsWith("http")) continue;
+    const list = parseList(line);
     const id = parseId(line);
-    if (id) ids.push(id); else skipped++;
+    if (list) lists.push(list); else if (id) ids.push(id); else skipped++;
   }
-  if (!ids.length) { setStatus(skipped ? "Só funcionam links de vídeo (não de playlist)." : "Cola primeiro um link do YouTube."); return; }
+  if (!ids.length && !lists.length) { setStatus(skipped ? "Link não reconhecido (usa links de vídeo ou de playlist)." : "Cola primeiro um link do YouTube."); return; }
   $("box").value = "";
-  if (replace) { S.queue = []; S.idx = -1; stopPlayback(); }
+  if (lists.length) setStatus("A ler a playlist…");
+  for (const l of lists) ids.push(...await expandPlaylist(l));
+  if (!ids.length) { setStatus("Não consegui ler a playlist (privada ou indisponível?)."); return; }
   const start = S.queue.length;
   ids.forEach(id => S.queue.push(id));
   ids.forEach(fetchTitle);
   save(); render();
-  setStatus(ids.length + " link(s) adicionados" + (skipped ? ", " + skipped + " ignorado(s)" : "") + ".");
+  setStatus(ids.length + " vídeo(s) adicionados" + (skipped ? ", " + skipped + " ignorado(s)" : "") + ".");
   if (!active) play(start);
+}
+// Botão: limpa o campo, cola o que está na área de transferência e adiciona
+async function pasteAndAdd() {
+  $("box").value = "";
+  try { $("box").value = await navigator.clipboard.readText(); }
+  catch (e) { setStatus("Sem acesso à área de transferência: cola no campo com Ctrl+V."); $("box").focus(); return; }
+  addFromBox();
 }
 
 // ---------- leitor do YouTube ----------
@@ -309,6 +357,9 @@ function render() {
     li.appendChild(t);
     hl.appendChild(li);
   });
+  $("video").classList.toggle("audio", S.audio);
+  $("audio").textContent = S.audio ? "Só áudio: sim" : "Só áudio: não";
+  $("audio").classList.toggle("on", S.audio);
   $("shuffle").classList.toggle("on", S.shuffle);
   $("repeat").textContent = REPEAT[S.repeat];
   $("repeat").classList.toggle("on", S.repeat > 0);
@@ -341,15 +392,15 @@ if ("mediaSession" in navigator) {
 }
 
 // ---------- eventos ----------
-$("add").onclick = () => addFromBox(false);
-$("replace").onclick = () => addFromBox(true);
-$("box").addEventListener("paste", () => setTimeout(() => addFromBox(false), 50));
-$("box").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addFromBox(false); } });
+$("add").onclick = pasteAndAdd;
+$("box").addEventListener("paste", () => setTimeout(addFromBox, 50));
+$("box").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addFromBox(); } });
 $("play").onclick = togglePlay;
 $("prev").onclick = prev;
 $("next").onclick = () => next(false);
 $("back").onclick = () => seekTo(Math.max(0, pos - 10));
 $("fwd").onclick = () => seekTo(pos + 10);
+$("audio").onclick = () => { S.audio = !S.audio; save(); render(); };
 $("shuffle").onclick = () => { S.shuffle = !S.shuffle; save(); render(); };
 $("repeat").onclick = () => { S.repeat = (S.repeat + 1) % 3; save(); render(); };
 $("speed").value = S.speed;
@@ -366,7 +417,7 @@ if (q) { $("box").value = q; history.replaceState(null, "", location.pathname); 
 
 render();
 S.queue.forEach(fetchTitle);
-if (q) addFromBox(false);
+if (q) addFromBox();
 </script>
 </body>
 </html>
